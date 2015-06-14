@@ -6,23 +6,40 @@ use warnings;
 use utf8;
 
 sub new {
+    my $class = shift;
+    my $body  = {
+        test_input  => [],
+        test_output => [],
 
+        $_[0] ? %{ $_[0] } : ()
+    };
+    return bless $body, $class;
 }
 
-sub title {
-
+sub _attr {
+    my ($self, $val, $nv) = @_;
+    $self->{$val} = $nv if $nv;
+    return $self->{$val};
 }
 
-sub contents {
+# set_sampledata (div.sampledata.*)
+# 샘플 데이터를 설정합니다.
+sub set_sampledata {
+    my $self     = shift;
+    my @elements = @_;
 
+    for my $element (@elements) {
+        if ($element->attr("id") =~ m{^sample-(?<type>(input|output))-(?<num>\d+)$}) {
+            my $type = sprintf "test_%s", $+{type};
+            my $num  = $+{num} - 1;
+            
+            $self->{$type}->[$num] = $element->as_text;
+        }
+    }
 }
 
-sub test_input {
-
-}
-
-sub test_output {
-
+for my $attr (qw/title description input output test_input test_output/) {
+    eval sprintf 'sub %s { shift->_attr("%s", @_) }', $attr, $attr;
 }
 
 sub eval {
@@ -49,19 +66,23 @@ sub API_STATUS  () { API_BASE."/status" }
 
 sub UA_DEFAULT_AGENT () { sprintf "Mozilla/5.0 (%s; baekjoon.pl/%s)", $^O, $VERSION }
 
-sub SEARCH_CRITERIA () { (
+sub SEARCH_CRITERIA () { {
     title       => { _tag => "span", id => "problem_title" },
     description => { _tag => "div",  id => "problem_description" },
     input       => { _tag => "div",  id => "problem_input" },
     output      => { _tag => "div",  id => "problem_output" },
-    sampledata  => { _tag => "div", class=> "sampledata" },
-) }
 
-sub WARN_HTML_TREE_NOT_INSTALLED   () { "경고: HTML::TreeBuilder 모듈이 설치되어 있지 않습니다. 정규식 기반의 파싱을 시도합니다." }
+    set_sampledata  => { _tag => "div", class=> "sampledata" },
+} }
 
+sub ERROR_HTML_TREE_NOT_INSTALLED   () { "경고: HTML::TreeBuilder 모듈이 설치되어 있지 않습니다. README를 읽어 주십시오." }
+sub ERROR_NOT_IMPLEMENTED          () { "해당 기능은 아직 구현되지 않았습니다." }
+sub ERROR_PARSE_FAILED             () { "HTML 문서 파싱에 실패하였습니다. 올바른 문제 번호가 아닌 것 같은데요?" }
+
+# sub new([$options])
+# 새 인스턴스를 생성합니다.
+# s/class/soul/g 하면 뭔가 인체 연성 같이 보인다!!
 sub new {
-    # 새 인스턴스를 생성합니다.
-    # s/class/soul/g 하면 뭔가 인체 연성 같이 보인다!!
 
     my ($class, $options) = @_;
     my $body = { 
@@ -96,8 +117,8 @@ sub _parse_problem {
         require HTML::TreeBuilder;
     };
     if ($@) {
-        warn WARN_HTML_TREE_NOT_INSTALLED;
-        return $self->_parse_problem_regex(@_);
+        die ERROR_HTML_TREE_NOT_INSTALLED;
+        # return $self->_parse_problem_regex(@_);
     }
 
     return $self->_parse_problem_treebuilder(@_);
@@ -106,14 +127,30 @@ sub _parse_problem {
 sub _parse_problem_treebuilder {
     my $self    = shift;
     my $content = shift;
+    my $problem = Baekjoon::Problem->new;
     my $root    = HTML::TreeBuilder->new_from_content($content);
 
-    print $title->as_text;
+    my %criteria = %{ SEARCH_CRITERIA() };
+    while (my ($attr, $value) = each %criteria) {
+        my @elements = $root->look_down(%{ $value });
+
+        die ERROR_PARSE_FAILED unless @elements;
+
+        $problem->$attr(
+            $#elements ? @elements : (shift @elements)->as_text
+        );
+    }
+
+    return $problem;
 }
 
+# sub _parse_problem_regex($content)
+# HTML 문서를 정규식으로 파싱을 시도합니다.
+# 구현되지 않았습니다.
 sub _parse_problem_regex {
     my $self    = shift;
     my $content = shift;
+    die ERROR_NOT_IMPLEMENTED;
 }
 
 # sub _try_request($request)
