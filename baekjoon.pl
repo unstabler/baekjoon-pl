@@ -17,10 +17,10 @@ sub eval {
     
     my $is_success = 1;
 
-    printf "%s - 테스트 시작합니다.\n", $problem->title;
+    printf "%s - 테스트 시작합니다.\n\n", $problem->title;
 
     for (my $i = 0; $i <= $#input; $i++) {
-        printf "%d / %d ... ", $i + 1, $#input + 1;
+        warn sprintf "test case #%d ----\ninput:\n%s\n\noutput must be:\n%s\n\n", $i + 1, $input[$i], $output[$i];
 
         # TODO: 일관적이지 않은 변수명 수정 (output / out가 충돌하잖아!)
         my ($stdin, $stdout, $out);
@@ -35,7 +35,9 @@ sub eval {
         close $stdout;
         chomp $out;
 
+        printf "your output:\n%s\n\n", $out;
         # 비교하쟛! 
+        printf "test case #%d/%d ... ", $i + 1, $#input + 1;
         printf "%s\n", ($output[$i] eq $out) ? "ok" : "fail";
     }
 }
