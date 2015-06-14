@@ -1,4 +1,45 @@
 #!/usr/bin/env perl
+package Baekjoon::Evaluator;
+use 5.008;
+use strict;
+use warnings;
+use utf8;
+
+use IPC::Open2;
+
+# static sub eval(Baekjoon::Problem)
+# 테스트 케이스를 평가합니다.
+sub eval {
+    my $problem = shift;
+    my $program = shift;
+    my @input   = @{$problem->test_input};
+    my @output  = @{$problem->test_output};
+    
+    my $is_success = 1;
+
+    printf "%s - 테스트 시작합니다.\n", $problem->title;
+
+    for (my $i = 0; $i <= $#input; $i++) {
+        printf "%d / %d ... ", $i + 1, $#input + 1;
+
+        # TODO: 일관적이지 않은 변수명 수정 (output / out가 충돌하잖아!)
+        my ($stdin, $stdout, $out);
+        my $pid = open2($stdout, $stdin, $program);
+
+        # 테스트 케이스의 입력을 흘려넣고..
+        print $stdin $input[$i];
+        close $stdin;
+
+        # 출력을 받아서..
+        $out .= $_ while <$stdout>;
+        close $stdout;
+        chomp $out;
+
+        # 비교하쟛! 
+        printf "%s\n", ($output[$i] eq $out) ? "ok" : "fail";
+    }
+}
+
 package Baekjoon::Problem;
 use 5.008;
 use strict;
@@ -32,18 +73,16 @@ sub set_sampledata {
         if ($element->attr("id") =~ m{^sample-(?<type>(input|output))-(?<num>\d+)$}) {
             my $type = sprintf "test_%s", $+{type};
             my $num  = $+{num} - 1;
-            
-            $self->{$type}->[$num] = $element->as_text;
+            my $data = $element->as_text;
+            $data =~ s/\s+$//g; # 끝에 붙는 공백 제거
+
+            $self->{$type}->[$num] = $data;
         }
     }
 }
 
 for my $attr (qw/title description input output test_input test_output/) {
     eval sprintf 'sub %s { shift->_attr("%s", @_) }', $attr, $attr;
-}
-
-sub eval {
-
 }
 
 package Baekjoon::API;
@@ -75,9 +114,9 @@ sub SEARCH_CRITERIA () { {
     set_sampledata  => { _tag => "div", class=> "sampledata" },
 } }
 
-sub ERROR_HTML_TREE_NOT_INSTALLED   () { "경고: HTML::TreeBuilder 모듈이 설치되어 있지 않습니다. README를 읽어 주십시오." }
-sub ERROR_NOT_IMPLEMENTED          () { "해당 기능은 아직 구현되지 않았습니다." }
-sub ERROR_PARSE_FAILED             () { "HTML 문서 파싱에 실패하였습니다. 올바른 문제 번호가 아닌 것 같은데요?" }
+sub ERROR_HTML_TREE_NOT_INSTALLED () { "경고: HTML::TreeBuilder 모듈이 설치되어 있지 않습니다. README를 읽어 주십시오." }
+sub ERROR_NOT_IMPLEMENTED         () { "해당 기능은 아직 구현되지 않았습니다." }
+sub ERROR_PARSE_FAILED            () { "HTML 문서 파싱에 실패하였습니다. 올바른 문제 번호가 아닌 것 같은데요?" }
 
 # sub new([$options])
 # 새 인스턴스를 생성합니다.
@@ -178,9 +217,10 @@ use strict;
 use warnings;
 use utf8;
 
-sub DEFAULT_ENC           () { ($^O eq "MSWin32") ? "euc-kr" : "utf8" }
+sub DEFAULT_ENC   () { ($^O eq "MSWin32") ? "euc-kr" : "utf8" }
 
-sub ERROR_NOT_IMPLEMENTED () { "해당 기능은 아직 구현되지 않았습니다." }
+sub ERROR_NOT_IMPLEMENTED    () { "해당 기능은 아직 구현되지 않았습니다." }
+sub ERROR_FILE_NOT_INSTALLED () { "file 명령어가 설치되어 있지 않습니다." }
 sub USAGE () {
     return <<EOF;
 baekjoon.pl - Baekjoon Online Judge 도우미 스크립트
@@ -205,7 +245,7 @@ extra-options:
 
 그리고:
     - [language]가 지정되지 않으면 file 명령을 통한 자동 검출을 시도합니다.
-    - C처럼 빌드 작업이 이루어지는 언어는 [program]에 소스 코드
+    - C처럼 빌드 작업이 이루어지는 언어는 테스트 시 [program]에 소스 코드
       대신 컴파일된 바이너리 파일을 입력해 주세요.
 
     - 계정명은 환경 변수에 BAEKJOON_USERNAME으로 저장하면 쉽게 로그인
@@ -232,12 +272,22 @@ sub parse_argv {
     } elsif ($command eq "info" || $command eq "get-info") {
         die ERROR_NOT_IMPLEMENTED; 
     } elsif ($command eq "test" || $command eq "get-test") {
-        $baekjoon->problem($problem);
+        my $problem = $baekjoon->problem($problem);
+        Baekjoon::Evaluator::eval($problem, $program);
     } elsif ($command eq "submit") {
 
     } else {
         die sprintf "명령 %s는 지원되지 않는 명령입니다.", $command;
     }
+}
+
+sub determine_type {
+    my $program = shift;
+
+    unless (`which file`) {
+        warn ERROR_FILE_NOT_INSTALLED;
+        return 0;
+    }    
 }
 
 parse_argv(@ARGV);
