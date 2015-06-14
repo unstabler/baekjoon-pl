@@ -15,7 +15,8 @@ sub eval {
     my @input   = @{$problem->test_input};
     my @output  = @{$problem->test_output};
     
-    my $is_success = 1;
+    my $test_success = 1;
+    my $case_success;
 
     printf "%s - 테스트 시작합니다.\n\n", $problem->title;
 
@@ -35,11 +36,16 @@ sub eval {
         close $stdout;
         chomp $out;
 
-        printf "your output:\n%s\n\n", $out;
+        warn sprintf "your output:\n%s\n\n", $out;
         # 비교하쟛! 
+        $case_success = ($output[$i] eq $out) ? 1 : 0;
         printf "test case #%d/%d ... ", $i + 1, $#input + 1;
-        printf "%s\n", ($output[$i] eq $out) ? "ok" : "fail";
+        printf "%s\n", ($case_success) ? "ok" : "fail";
+
+        $test_success = 0 unless $case_success;
     }
+
+    exit !$test_success;
 }
 
 package Baekjoon::Problem;
@@ -77,6 +83,7 @@ sub set_sampledata {
             my $num  = $+{num} - 1;
             my $data = $element->as_text;
             $data =~ s/\s+$//g; # 끝에 붙는 공백 제거
+            $data =~ s/\r\n/\n/g;
 
             $self->{$type}->[$num] = $data;
         }
@@ -169,7 +176,11 @@ sub _parse_problem_treebuilder {
     my $self    = shift;
     my $content = shift;
     my $problem = Baekjoon::Problem->new;
-    my $root    = HTML::TreeBuilder->new_from_content($content);
+    my $root    = HTML::TreeBuilder->new;
+    $root->no_space_compacting(1);
+    $root->ignore_ignorable_whitespace(0);
+
+    $root->parse($content);
 
     my %criteria = %{ SEARCH_CRITERIA() };
     while (my ($attr, $value) = each %criteria) {
